@@ -1,8 +1,10 @@
 """Executa o bot. Uso: python main.py [--once] [--live]
 Por padrão roda em DRY-RUN (não envia nada); use --live para publicar de verdade."""
 import argparse
+import http.server
 import logging
 import os
+import threading
 import time
 
 from bot.core import (already_posted, affiliate_url, fetch_feed, fetch_gatry_amazon, format_message, init_db,
@@ -11,6 +13,24 @@ from bot.shopee_batch import load_shopee_batch_offers
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("bot")
+
+
+def start_health_server():
+    """Abre uma porta web para o Render saber que o serviço está 100% vivo."""
+    port = int(os.environ.get("PORT", 8080))
+    class HealthHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"PromoFire Bot is LIVE and Healthy!")
+        def log_message(self, *args):
+            pass
+    try:
+        server = http.server.HTTPServer(("0.0.0.0", port), HealthHandler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        log.info("Servidor de Healthcheck iniciado na porta %d", port)
+    except Exception as e:
+        log.warning("Nao foi possivel iniciar servidor web: %s", e)
 
 
 def load_env(path=".env"):
@@ -77,6 +97,10 @@ def main():
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     if args.live and not token:
         raise SystemExit("Defina TELEGRAM_BOT_TOKEN no arquivo .env")
+    
+    # Inicia o servidor de saúde para o Render
+    start_health_server()
+    
     db = init_db(cfg.get("database", "ofertas.db"))
     while True:
         n = run_cycle(cfg, db, token, dry_run=not args.live)
