@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+*.lnk
+INICIAR_BOT.bat
+RODAR_EM_SEGUNDO_PLANO.vbs
+tests/

@@ -1,0 +1,34 @@
+{
+  "database": "ofertas.db",
+  "feeds": [
+    "https://rss.app/feeds/AjwHM7YBFRRt8WRf.xml",
+    "https://rss.app/feeds/pcs7wb2ZmJLjFiZv.xml",
+    "https://rss.app/feeds/M3YoVZvxtTvb7Sgt.xml"
+  ],
+  "telegram_chats": ["@PromoFirefast_bo"],
+  "schedule": {
+    "interval_minutes": 1,
+    "max_posts_per_cycle": 15,
+    "delay_between_posts_sec": 2
+  },
+  "filters": {
+    "require_price": false,
+    "min_price": 0,
+    "max_price": 50000,
+    "min_discount": 0,
+    "blocked_keywords": ["usado", "seminovo"],
+    "include_keywords": []
+  },
+  "affiliate": {
+    "amazon.com.br": { "tag_param": "tag", "tag_value": "promofire0c-20" },
+    "mercadolivre.com.br": { "matt_tool": "69788222", "matt_word": "nuneslucas20211001023212" },
+    "mercadolivre.com": { "matt_tool": "69788222", "matt_word": "nuneslucas20211001023212" },
+    "meli.la": { "matt_tool": "69788222", "matt_word": "nuneslucas20211001023212" },
+    "magazinevoce.com.br": { "store_name": "magazinelucsvendas" },
+    "magazineluiza.com.br": { "store_name": "magazinelucsvendas" },
+    "shopee.com.br": { "utm_source": "an_18344990452", "mmp_pid": "an_18344990452", "utm_campaign": "id_AHyshKFxj7R" },
+    "s.shopee.com.br": { "utm_source": "an_18344990452", "mmp_pid": "an_18344990452", "utm_campaign": "id_AHyshKFxj7R" },
+    "shope.ee": { "utm_source": "an_18344990452", "mmp_pid": "an_18344990452", "utm_campaign": "id_AHyshKFxj7R" }
+  },
+  "disclaimer": "Preços e disponibilidade podem mudar. Posso receber comissão pelas compras."
+}
