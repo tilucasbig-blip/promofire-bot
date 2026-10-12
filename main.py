@@ -16,7 +16,7 @@ log = logging.getLogger("bot")
 
 
 def start_health_server():
-    """Abre uma porta web para o Render saber que o serviço está 100% vivo."""
+    """Abre uma porta web e faz auto-ping a cada 5 minutos para o Render nunca hibernar."""
     port = int(os.environ.get("PORT", 8080))
     class HealthHandler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
@@ -31,6 +31,19 @@ def start_health_server():
         log.info("Servidor de Healthcheck iniciado na porta %d", port)
     except Exception as e:
         log.warning("Nao foi possivel iniciar servidor web: %s", e)
+
+    # Thread de Auto-Ping para manter o Render acordado 24/7
+    def keep_alive():
+        import requests
+        render_url = os.environ.get("RENDER_EXTERNAL_URL", f"http://127.0.0.1:{port}")
+        while True:
+            time.sleep(240)  # A cada 4 minutos dá um ping
+            try:
+                requests.get(render_url, timeout=10)
+            except Exception:
+                pass
+
+    threading.Thread(target=keep_alive, daemon=True).start()
 
 
 def load_env(path=".env"):
