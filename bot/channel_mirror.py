@@ -151,12 +151,33 @@ def process_and_mirror_channel(channel_username: str, cfg: dict, db, token: str,
         image = it["image"]
         
         # Identificador único pelo link do produto original
-        uid = hashlib.sha1(orig_link.encode()).hexdigest()
+        uid = hashlib.sha1(orig_link.split("?")[0].encode()).hexdigest()
         
         # Checa se já postou esse link exato
         if db.execute("SELECT 1 FROM posted WHERE uid=?", (uid,)).fetchone():
             continue
             
+        # Extrai o nome real do produto para evitar postar o mesmo produto duas vezes
+        lines = [l.strip() for l in orig_text.split("\n") if l.strip()]
+        prod_title = ""
+        for l in lines[1:]:
+            cleaned = re.sub(r"^[^\w\d]+", "", l).strip()
+            if len(cleaned) > 10 and not cleaned.lower().startswith("de r$") and not cleaned.lower().startswith("por:"):
+                prod_title = cleaned
+                break
+        if not prod_title and lines:
+            prod_title = lines[0]
+
+        # Checa se o mesmo produto já foi divulgado nos últimos 7 dias
+        if prod_title:
+            row = db.execute(
+                "SELECT 1 FROM posted WHERE LOWER(TRIM(title))=? AND posted_at >= datetime('now', '-7 days')",
+                (prod_title.lower().strip(),)
+            ).fetchone()
+            if row:
+                log.info("Produto já postado recentemente ignorado: %s", prod_title)
+                continue
+
         # Converte o link para o do usuário
         my_link, high_res_image = convert_to_user_affiliate(orig_link, cfg)
         if not my_link:
@@ -169,7 +190,7 @@ def process_and_mirror_channel(channel_username: str, cfg: dict, db, token: str,
         
         from bot.core import Offer, send_telegram
         dummy_offer = Offer(
-            title=orig_text.split("\n")[0][:80],
+            title=prod_title[:80],
             url=my_link,
             store="espelho",
             image=final_image
@@ -185,7 +206,7 @@ def process_and_mirror_channel(channel_username: str, cfg: dict, db, token: str,
             if not dry_run:
                 db.execute(
                     "INSERT OR IGNORE INTO posted (uid, title, store, price, affiliate_url) VALUES (?, ?, ?, ?, ?)",
-                    (uid, orig_text.split("\n")[0][:150], "espelho", 0.0, my_link)
+                    (uid, prod_title[:150], "espelho", 0.0, my_link)
                 )
                 db.commit()
             sent += 1
