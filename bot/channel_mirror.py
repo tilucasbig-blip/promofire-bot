@@ -25,6 +25,27 @@ def _is_valid_product_photo(url: str, min_side: int = 150, min_max_side: int = 3
     except Exception:
         return False
 
+def _clean_words(t: str) -> set[str]:
+    """Extrai palavras-chave essenciais para comparação de produtos entre grupos diferentes."""
+    words = re.findall(r'[a-zA-Z0-9]+', t.lower())
+    stop = {'de', 'do', 'da', 'em', 'com', 'para', 'o', 'a', 'os', 'as', 'e', 'no', 'na', 'por', 'pra', 'dos', 'das'}
+    res = set()
+    for w in words:
+        if w in stop or len(w) <= 2:
+            continue
+        if w.endswith('s') and len(w) > 3:
+            w = w[:-1]
+        res.add(w)
+    return res
+
+def _is_similar_product(t1: str, t2: str) -> bool:
+    """Verifica se dois títulos se referem ao mesmo produto mesmo que escritos de forma ligeiramente diferente."""
+    w1, w2 = _clean_words(t1), _clean_words(t2)
+    if not w1 or not w2:
+        return False
+    inter = w1 & w2
+    return (len(inter) / min(len(w1), len(w2))) >= 0.75
+
 def fetch_telegram_channel_direct(channel_username: str) -> list[dict]:
     """Coleta as últimas mensagens publicadas diretamente em t.me/s/canal sem delay de RSS."""
     url = f"https://t.me/s/{channel_username}"
@@ -187,14 +208,28 @@ def process_and_mirror_channel(channel_username: str, cfg: dict, db, token: str,
         if not prod_title and lines:
             prod_title = lines[0]
 
-        # Checa se o mesmo produto já foi divulgado nos últimos 7 dias
+        # Checa se o mesmo produto já foi divulgado nos últimos 7 dias (exato ou similar entre grupos diferentes)
         if prod_title:
+            # 1. Checagem exata rápida no banco
             row = db.execute(
                 "SELECT 1 FROM posted WHERE LOWER(TRIM(title))=? AND posted_at >= datetime('now', '-7 days')",
                 (prod_title.lower().strip(),)
             ).fetchone()
             if row:
-                log.info("Produto já postado recentemente ignorado: %s", prod_title)
+                log.info("Produto já postado recentemente ignorado (exato): %s", prod_title)
+                continue
+
+            # 2. Checagem inteligente de similaridade (pega produtos postados por outros canais concorrentes com títulos parecidos)
+            recent_titles = [r[0] for r in db.execute(
+                "SELECT title FROM posted WHERE posted_at >= datetime('now', '-7 days') LIMIT 150"
+            ).fetchall() if r[0]]
+            is_dup = False
+            for past_t in recent_titles:
+                if _is_similar_product(prod_title, past_t):
+                    log.info("Produto ignorado por alta similaridade com '%s': %s", past_t, prod_title)
+                    is_dup = True
+                    break
+            if is_dup:
                 continue
 
         # Converte o link para o do usuário
