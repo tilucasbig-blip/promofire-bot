@@ -262,10 +262,27 @@ def process_and_mirror_channel(channel_username: str, cfg: dict, db, token: str,
             
         anchor = f'<a href="{_html.escape(my_link, quote=True)}">{label}</a>'
         
-        # Formata o texto destacando instruções e códigos de CUPOM para o usuário copiar facilmente
+        # Formata o texto destacando instruções e cupons, e REMOVENDO nomes de canais concorrentes e links de grupos
         formatted_lines = []
+        bad_words = [
+            "canal de", "grupo de", "nosso canal", "nosso grupo", "entre no", "participe do",
+            "siga no", "t.me/", "telegram", "whatsapp", "#pub", "iuri", "lobao", "lobão",
+            "gatuno", "urubu", "byteplay", "auditor", "promotom", "nerdofertas", "loja oficial",
+            "clube de", "comunidade"
+        ]
+        
         for line in orig_text.split("\n"):
             l_strip = line.strip()
+            l_low = l_strip.lower()
+            
+            # Remove linhas que denunciam outros canais, redes sociais ou links de grupos
+            if any(bw in l_low for bw in bad_words) or ("http" in l_low and orig_link not in line):
+                continue
+                
+            # Remove linhas que sobram com apenas emojis de pessoas/grupos (ex: 👥)
+            if l_strip in ["👥", "📢", "💬", "👉", "👇", "🔗"]:
+                continue
+
             # Se a linha menciona cupom, coloca destaque visual e código monoespaçado (clique para copiar)
             if re.search(r'\bcupom\b', l_strip, re.IGNORECASE):
                 m_code = re.search(r'cupom[:\s]+([A-Za-z0-9_\-]+)', l_strip, re.IGNORECASE)
@@ -280,7 +297,7 @@ def process_and_mirror_channel(channel_username: str, cfg: dict, db, token: str,
             else:
                 formatted_lines.append(_html.escape(line, quote=False))
                 
-        escaped_text = "\n".join(formatted_lines)
+        escaped_text = "\n".join(formatted_lines).strip()
         final_text = escaped_text.replace(_html.escape(orig_link, quote=False), anchor)
         if anchor not in final_text:
             final_text += "\n\n" + anchor
