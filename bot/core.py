@@ -376,13 +376,13 @@ def send_telegram(token: str, chat_id: str, o: Offer, text: str, dry_run: bool) 
         except Exception as e:
             log.warning("Erro ao processar/converter foto para Telegram: %s", e)
 
-    r = requests.post(f"{base}/sendMessage", data={
+    r = requests.post(f"{base}/sendMessage", json={
         "chat_id": chat_id, "text": text, "parse_mode": "HTML",
-        "disable_web_page_preview": "false"}, timeout=30)
+        "disable_web_page_preview": True}, timeout=30)
     if not r.ok:
-        r = requests.post(f"{base}/sendMessage", data={
+        r = requests.post(f"{base}/sendMessage", json={
             "chat_id": chat_id, "text": text,
-            "disable_web_page_preview": "false"}, timeout=30)
+            "disable_web_page_preview": True}, timeout=30)
     if not r.ok:
         log.error("Telegram erro: %s", r.text[:300])
     return r.ok

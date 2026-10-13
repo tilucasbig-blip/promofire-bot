@@ -192,6 +192,9 @@ def process_and_mirror_channel(channel_username: str, cfg: dict, db, token: str,
             continue
             
         final_image = high_res_image or image
+        if not final_image:
+            log.info("Ignorando postagem sem foto do produto: %s", prod_title)
+            continue
         
         # Substitui o link do concorrente pelo seu link de afiliado no texto original
         final_text = orig_text.replace(orig_link, my_link)
