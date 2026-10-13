@@ -127,8 +127,8 @@ def convert_to_user_affiliate(link: str, cfg: dict) -> tuple[str, str | None]:
         # Sem encurtadores de terceiros (TinyURL injeta anúncio + VigLink e pode desviar comissão)
         return full_ml, real_image
 
-    # 2. Amazon (amzn.to, amzlink.to, amazon.com.br)
-    if "amazon" in link or "amzn.to" in link or "amzlink.to" in link:
+    # 2. Amazon (amzn.to, amzlink.to, amazon.com.br, amzn.divulgador.link, etc.)
+    if "amazon" in link or "amzn" in link or "amzlink.to" in link:
         rule = aff.get("amazon.com.br", {})
         tag = rule.get("tag_value", "promofire0c-20")
         target_url = link
@@ -137,11 +137,12 @@ def convert_to_user_affiliate(link: str, cfg: dict) -> tuple[str, str | None]:
             target_url = r.url
         except Exception:
             pass
-        clean_prod = target_url.split("?")[0]
-        p = urlparse(clean_prod)
-        q = dict(parse_qsl(p.query))
-        q["tag"] = tag
-        return urlunparse(p._replace(query=urlencode(q))), None
+        if "amazon" in target_url:
+            clean_prod = target_url.split("?")[0]
+            p = urlparse(clean_prod)
+            q = dict(parse_qsl(p.query))
+            q["tag"] = tag
+            return urlunparse(p._replace(query=urlencode(q))), None
 
     # 3. Shopee (shopee.com.br, s.shopee.com.br, shope.ee)
     if "shopee" in link or "shope.ee" in link:

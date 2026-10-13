@@ -1,6 +1,16 @@
 {
   "database": "ofertas.db",
-  "mirror_channels": ["lobaopromo"],
+  "mirror_channels": [
+    "lobaopromo",
+    "iuriindica",
+    "gatunopromos",
+    "urubupromo",
+    "promoindicabr",
+    "promobyteplay",
+    "auditorpromo",
+    "promotom",
+    "nerdofertas"
+  ],
   "feeds": [],
   "telegram_chats": ["@PromoFirefast_bo"],
   "schedule": {
