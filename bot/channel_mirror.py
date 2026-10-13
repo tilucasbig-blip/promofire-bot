@@ -9,9 +9,10 @@ log = logging.getLogger("bot")
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 
-def _is_valid_product_photo(url: str, min_side: int = 300) -> bool:
+def _is_valid_product_photo(url: str, min_side: int = 150, min_max_side: int = 300) -> bool:
     """Baixa a imagem e só aceita se abrir corretamente e tiver tamanho de foto de produto.
-    Avatares/logos de perfil (ex.: 120x120) são rejeitados."""
+    Avatares/logos de perfil minúsculos (ex.: 120x120) são rejeitados, mas fotos verticais
+    de produtos (ex: perfumes 270x500) são aceitas normalmente."""
     try:
         import io
         from PIL import Image
@@ -19,7 +20,8 @@ def _is_valid_product_photo(url: str, min_side: int = 300) -> bool:
         if not resp.ok:
             return False
         w, h = Image.open(io.BytesIO(resp.content)).size
-        return min(w, h) >= min_side
+        # Rejeita avatares pequenos (120x120), mas aceita produtos reais
+        return max(w, h) >= min_max_side and min(w, h) >= min_side
     except Exception:
         return False
 
@@ -201,7 +203,7 @@ def process_and_mirror_channel(channel_username: str, cfg: dict, db, token: str,
             continue
             
         final_image = None
-        for candidate in (high_res_image, image):
+        for candidate in (image, high_res_image):
             if candidate and _is_valid_product_photo(candidate):
                 final_image = candidate
                 break
