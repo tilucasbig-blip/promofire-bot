@@ -28,7 +28,8 @@ def _is_valid_product_photo(url: str, min_side: int = 150, min_max_side: int = 3
 def _clean_words(t: str) -> set[str]:
     """Extrai palavras-chave essenciais para comparação de produtos entre grupos diferentes."""
     words = re.findall(r'[a-zA-Z0-9]+', t.lower())
-    stop = {'de', 'do', 'da', 'em', 'com', 'para', 'o', 'a', 'os', 'as', 'e', 'no', 'na', 'por', 'pra', 'dos', 'das'}
+    stop = {'de', 'do', 'da', 'em', 'com', 'para', 'o', 'a', 'os', 'as', 'e', 'no', 'na', 'por', 'pra', 'dos', 'das',
+            'promocao', 'promoção', 'oferta', 'ofertas', 'cupom', 'frete', 'gratis', 'grátis', 'desconto', 'imperdivel', 'imperdível', 'aproveite', 'corre'}
     res = set()
     for w in words:
         if w in stop or len(w) <= 2:
@@ -45,6 +46,49 @@ def _is_similar_product(t1: str, t2: str) -> bool:
         return False
     inter = w1 & w2
     return (len(inter) / min(len(w1), len(w2))) >= 0.75
+
+def _extract_message_price(text: str) -> float:
+    """Extrai com precisão o menor preço em R$ anunciado nesta oferta, ignorando parcelamentos e cupons de desconto."""
+    t = text
+    # Remove parcelamentos (ex: 10x de R$ 29,90 ou 12x R$ 50)
+    t = re.sub(r'\b\d{1,2}\s*[xX]\s*(?:de\s*)?R\$\s*[\d\.\,]+', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'\b\d{1,2}\s*[xX]\s*[\d\.\,]+', '', t, flags=re.IGNORECASE)
+    # Remove valores de cupons/descontos/cashback/frete (ex: R$ 20 OFF, cashback de R$ 15)
+    t = re.sub(r'(?:cupom|desconto|off|cashback|frete)\s*(?:de\s*)?R\$\s*[\d\.\,]+', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'R\$\s*[\d\.\,]+\s*(?:de\s*)?(?:cupom|desconto|off|cashback)', '', t, flags=re.IGNORECASE)
+
+    vals = []
+    # 1. Prioriza preços que seguem 'por', 'pix', 'vista', 'apenas', 'sai por'
+    promo_matches = re.findall(r'(?:por|pix|vista|apenas|sai por)\s*[:]?\s*(?:R\$\s*)?([0-9\.\,]+)', t, re.IGNORECASE)
+    for m in promo_matches:
+        clean = m.strip().rstrip('.,;')
+        if ',' in clean:
+            clean = clean.replace('.', '').replace(',', '.')
+        else:
+            clean = clean.replace('.', '')
+        try:
+            v = float(clean)
+            if 0.5 < v < 200000:
+                vals.append(v)
+        except ValueError:
+            pass
+
+    # 2. Se não achou com prefixo específico de promoção, pega qualquer R$ restante
+    if not vals:
+        for m in re.findall(r'R\$\s*([0-9\.\,]+)', t, re.IGNORECASE):
+            clean = m.strip().rstrip('.,;')
+            if ',' in clean:
+                clean = clean.replace('.', '').replace(',', '.')
+            else:
+                clean = clean.replace('.', '')
+            try:
+                v = float(clean)
+                if 0.5 < v < 200000:
+                    vals.append(v)
+            except ValueError:
+                pass
+
+    return min(vals) if vals else 0.0
 
 def fetch_telegram_channel_direct(channel_username: str) -> list[dict]:
     """Coleta as últimas mensagens publicadas diretamente em t.me/s/canal sem delay de RSS."""
@@ -193,11 +237,23 @@ def process_and_mirror_channel(channel_username: str, cfg: dict, db, token: str,
         
         # Identificador único pelo link do produto original
         uid = hashlib.sha1(orig_link.split("?")[0].encode()).hexdigest()
-        
-        # Checa se já postou esse link exato
-        if db.execute("SELECT 1 FROM posted WHERE uid=?", (uid,)).fetchone():
-            continue
-            
+
+        # Extrai o menor preço em R$ anunciado nesta oferta
+        current_price = _extract_message_price(orig_text)
+
+        # Regra de 24 horas: Não repetir o mesmo link, exceto se o preço estiver mais baixo
+        row_uid = db.execute(
+            "SELECT price FROM posted WHERE uid=? AND posted_at >= datetime('now', '-24 hours') ORDER BY posted_at DESC LIMIT 1",
+            (uid,)
+        ).fetchone()
+        if row_uid:
+            past_price = float(row_uid[0] or 0.0)
+            if current_price > 0 and past_price > 0 and current_price < past_price:
+                log.info("Link exato baixou de preço em 24h (R$ %.2f -> R$ %.2f)! Permitindo repostagem: %s", past_price, current_price, orig_link)
+            else:
+                log.info("Link exato já postado nas últimas 24h ignorado (preço não baixou): %s", orig_link)
+                continue
+
         # Extrai o nome real do produto para evitar postar o mesmo produto duas vezes
         lines = [l.strip() for l in orig_text.split("\n") if l.strip()]
         prod_title = ""
@@ -209,28 +265,39 @@ def process_and_mirror_channel(channel_username: str, cfg: dict, db, token: str,
         if not prod_title and lines:
             prod_title = lines[0]
 
-        # Checa se o mesmo produto já foi divulgado nos últimos 7 dias (exato ou similar entre grupos diferentes)
+        # Regra de 24 horas: Não repetir o mesmo produto, a menos que o preço atual seja mais baixo que o já postado
         if prod_title:
-            # 1. Checagem exata rápida no banco
-            row = db.execute(
-                "SELECT 1 FROM posted WHERE LOWER(TRIM(title))=? AND posted_at >= datetime('now', '-7 days')",
+            # 1. Checa por correspondência exata de título nas últimas 24 horas
+            row_24h = db.execute(
+                "SELECT price FROM posted WHERE LOWER(TRIM(title))=? AND posted_at >= datetime('now', '-24 hours') ORDER BY posted_at DESC LIMIT 1",
                 (prod_title.lower().strip(),)
             ).fetchone()
-            if row:
-                log.info("Produto já postado recentemente ignorado (exato): %s", prod_title)
-                continue
+            
+            if row_24h:
+                past_price = float(row_24h[0] or 0.0)
+                # Se temos preços válidos e o preço atual é menor que o anterior, permite repostar avisando queda de preço!
+                if current_price > 0 and past_price > 0 and current_price < past_price:
+                    log.info("Produto '%s' baixou de preço em 24h (R$ %.2f -> R$ %.2f)! Permitindo repostagem.", prod_title, past_price, current_price)
+                else:
+                    log.info("Produto já postado nas últimas 24h ignorado (preço não baixou): %s", prod_title)
+                    continue
 
-            # 2. Checagem inteligente de similaridade (pega produtos postados por outros canais concorrentes com títulos parecidos)
-            recent_titles = [r[0] for r in db.execute(
-                "SELECT title FROM posted WHERE posted_at >= datetime('now', '-7 days') LIMIT 150"
-            ).fetchall() if r[0]]
-            is_dup = False
-            for past_t in recent_titles:
-                if _is_similar_product(prod_title, past_t):
-                    log.info("Produto ignorado por alta similaridade com '%s': %s", past_t, prod_title)
-                    is_dup = True
-                    break
-            if is_dup:
+            # 2. Checa por similaridade inteligente com outros produtos postados nas últimas 24 horas
+            recent_rows = db.execute(
+                "SELECT title, price FROM posted WHERE posted_at >= datetime('now', '-24 hours') LIMIT 150"
+            ).fetchall()
+            
+            is_dup_same_price = False
+            for past_t, p_price in recent_rows:
+                if past_t and _is_similar_product(prod_title, past_t):
+                    past_p = float(p_price or 0.0)
+                    if current_price > 0 and past_p > 0 and current_price < past_p:
+                        log.info("Produto similar '%s' baixou de preço em 24h (R$ %.2f -> R$ %.2f)! Permitindo postagem.", prod_title, past_p, current_price)
+                    else:
+                        log.info("Produto ignorado por alta similaridade nas últimas 24h com '%s': %s", past_t, prod_title)
+                        is_dup_same_price = True
+                        break
+            if is_dup_same_price:
                 continue
 
         # Converte o link para o do usuário
@@ -319,11 +386,11 @@ def process_and_mirror_channel(channel_username: str, cfg: dict, db, token: str,
         if ok:
             if not dry_run:
                 db.execute(
-                    "INSERT OR IGNORE INTO posted (uid, title, store, price, affiliate_url) VALUES (?, ?, ?, ?, ?)",
-                    (uid, prod_title[:150], "espelho", 0.0, my_link)
+                    "INSERT OR REPLACE INTO posted (uid, title, store, price, affiliate_url, posted_at) VALUES (?, ?, ?, ?, ?, datetime('now'))",
+                    (uid, prod_title[:150], "espelho", current_price, my_link)
                 )
                 db.commit()
             sent += 1
-            log.info("Oferta espelhada com sucesso do canal @%s: %s", channel_username, my_link)
+            log.info("Oferta espelhada com sucesso do canal @%s: %s (R$ %.2f)", channel_username, my_link, current_price)
             
     return sent

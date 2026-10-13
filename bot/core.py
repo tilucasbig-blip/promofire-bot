@@ -51,19 +51,36 @@ def init_db(path: str) -> sqlite3.Connection:
 
 
 def already_posted(db, offer: Offer) -> bool:
-    # 1. Checa por UID da URL
-    if db.execute("SELECT 1 FROM posted WHERE uid=?", (offer.uid,)).fetchone():
+    # 1. Checa por UID da URL nas últimas 24 horas
+    row_uid = db.execute(
+        "SELECT price FROM posted WHERE uid=? AND posted_at >= datetime('now', '-24 hours') ORDER BY posted_at DESC LIMIT 1",
+        (offer.uid,)
+    ).fetchone()
+    if row_uid:
+        past_price = float(row_uid[0] or 0.0)
+        if offer.price and past_price > 0 and float(offer.price) < past_price:
+            return False  # Preço menor, permite repostar!
         return True
-    # 2. Checa por Título nos últimos 7 dias para evitar posts duplicados com links levemente diferentes
+
+    # 2. Checa por Título nas últimas 24 horas para evitar posts duplicados
     clean_title = offer.title.strip().lower()
-    row = db.execute("SELECT 1 FROM posted WHERE LOWER(TRIM(title))=? AND posted_at >= datetime('now', '-7 days')", (clean_title,)).fetchone()
-    return row is not None
+    row_title = db.execute(
+        "SELECT price FROM posted WHERE LOWER(TRIM(title))=? AND posted_at >= datetime('now', '-24 hours') ORDER BY posted_at DESC LIMIT 1",
+        (clean_title,)
+    ).fetchone()
+    if row_title:
+        past_price = float(row_title[0] or 0.0)
+        if offer.price and past_price > 0 and float(offer.price) < past_price:
+            return False  # Preço menor, permite repostar!
+        return True
+
+    return False
 
 
 def mark_posted(db, offer: Offer, aff_url: str):
     db.execute(
-        "INSERT OR IGNORE INTO posted (uid,title,store,price,affiliate_url) VALUES (?,?,?,?,?)",
-        (offer.uid, offer.title, offer.store, offer.price, aff_url),
+        "INSERT OR REPLACE INTO posted (uid, title, store, price, affiliate_url, posted_at) VALUES (?, ?, ?, ?, ?, datetime('now'))",
+        (offer.uid, offer.title, offer.store, offer.price or 0.0, aff_url),
     )
     db.commit()
 
