@@ -300,28 +300,14 @@ HOOKS = [
 
 # ---------- encurtador de links ----------
 def shorten_url(url: str) -> str:
-    """Encurta URLs longas para ficarem limpas, mantendo domínios curtos oficiais."""
-    # Se já for um link curto oficial, preserva como está
-    if any(short_domain in url for short_domain in ["s.shopee.com.br", "shope.ee", "meli.la", "amzn.to", "tinyurl.com"]):
-        return url
-
-    if len(url) < 45:
-        return url
-    try:
-        r = requests.get(f"https://tinyurl.com/api-create.php?url={quote(url, safe='')}", timeout=8)
-        if r.ok and r.text.startswith("http"):
-            return r.text.strip()
-    except Exception:
-        pass
+    """Não usa mais encurtadores de terceiros (TinyURL injetava anúncio + redirecionamento VigLink,
+    arriscando a comissão). O link oficial é exibido atrás de um texto curto clicável."""
     return url
 
 
 def format_message(o: Offer, link: str, cfg: dict) -> str:
     esc = html.escape
     import random
-    
-    # Encurta o link se for muito longo
-    short_link = shorten_url(link)
     
     # Seleciona uma frase chamativa baseada no título
     hook = HOOKS[abs(hash(o.title)) % len(HOOKS)]
@@ -342,8 +328,8 @@ def format_message(o: Offer, link: str, cfg: dict) -> str:
         lines.append(f"🔥 <i>{o.discount}% de desconto</i>")
         
     lines.append("")
-    # Link limpo, curto e direto exatamente como no modelo do Lobão
-    lines.append(f'👉 <a href="{esc(link)}">{esc(short_link)}</a>')
+    # Texto curto clicável apontando para o link oficial de afiliado
+    lines.append(f'👉 <a href="{esc(link)}">🛒 Comprar aqui</a>')
     
     return "\n".join(lines).strip()
 

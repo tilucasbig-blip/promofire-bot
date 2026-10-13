@@ -86,17 +86,8 @@ def convert_to_user_affiliate(link: str, cfg: dict) -> tuple[str, str | None]:
         q["matt_tool"] = matt_tool
         q["matt_word"] = matt_word
         full_ml = urlunparse(p._replace(query=urlencode(q)))
-        
-        # Encurta para não poluir o Telegram com links gigantes
-        short_ml = full_ml
-        try:
-            tiny_r = requests.get(f"https://tinyurl.com/api-create.php?url={requests.utils.quote(full_ml, safe='')}", timeout=6)
-            if tiny_r.ok and tiny_r.text.startswith("http"):
-                short_ml = tiny_r.text.strip()
-        except Exception:
-            pass
-
-        return short_ml, real_image
+        # Sem encurtadores de terceiros (TinyURL injeta anúncio + VigLink e pode desviar comissão)
+        return full_ml, real_image
 
     # 2. Amazon (amzn.to, amzlink.to, amazon.com.br)
     if "amazon" in link or "amzn.to" in link or "amzlink.to" in link:
@@ -112,15 +103,7 @@ def convert_to_user_affiliate(link: str, cfg: dict) -> tuple[str, str | None]:
         p = urlparse(clean_prod)
         q = dict(parse_qsl(p.query))
         q["tag"] = tag
-        full_amz = urlunparse(p._replace(query=urlencode(q)))
-        # Encurta para ficar no formato limpo e elegante igual ao amzlink.to
-        try:
-            tiny_r = requests.get(f"https://tinyurl.com/api-create.php?url={requests.utils.quote(full_amz, safe='')}", timeout=6)
-            if tiny_r.ok and tiny_r.text.startswith("http"):
-                return tiny_r.text.strip(), None
-        except Exception:
-            pass
-        return full_amz, None
+        return urlunparse(p._replace(query=urlencode(q))), None
 
     # 3. Shopee (shopee.com.br, s.shopee.com.br, shope.ee)
     if "shopee" in link or "shope.ee" in link:
@@ -207,8 +190,22 @@ def process_and_mirror_channel(channel_username: str, cfg: dict, db, token: str,
             log.info("Ignorando postagem sem foto do produto: %s", prod_title)
             continue
         
-        # Substitui o link do concorrente pelo seu link de afiliado no texto original
-        final_text = orig_text.replace(orig_link, my_link)
+        # Substitui o link do concorrente por um texto curto clicável que aponta para o SEU link oficial
+        import html as _html
+        if "mercadolivre" in my_link:
+            label = "🛒 Comprar no Mercado Livre"
+        elif "amazon" in my_link:
+            label = "🛒 Comprar na Amazon"
+        elif "shopee" in my_link:
+            label = "🛒 Comprar na Shopee"
+        elif "magazinevoce" in my_link or "magazineluiza" in my_link:
+            label = "🛒 Comprar no Magalu"
+        else:
+            label = "🛒 Comprar aqui"
+        anchor = f'<a href="{_html.escape(my_link, quote=True)}">{label}</a>'
+        final_text = _html.escape(orig_text, quote=False).replace(_html.escape(orig_link, quote=False), anchor)
+        if anchor not in final_text:
+            final_text += "\n" + anchor
         
         from bot.core import Offer, send_telegram
         dummy_offer = Offer(
