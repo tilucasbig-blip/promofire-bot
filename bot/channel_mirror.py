@@ -153,7 +153,7 @@ def process_and_mirror_channel(channel_username: str, cfg: dict, db, token: str,
         # Identificador único pelo link do produto original
         uid = hashlib.sha1(orig_link.encode()).hexdigest()
         
-        # Checa se já postou
+        # Checa se já postou esse link exato
         if db.execute("SELECT 1 FROM posted WHERE uid=?", (uid,)).fetchone():
             continue
             
