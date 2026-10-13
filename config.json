@@ -1,6 +1,7 @@
 {
   "database": "ofertas.db",
   "feeds": [
+    "https://rss.app/feeds/FP5LGSWuSZUjYEu7.xml",
     "https://rss.app/feeds/AjwHM7YBFRRt8WRf.xml",
     "https://rss.app/feeds/pcs7wb2ZmJLjFiZv.xml",
     "https://rss.app/feeds/M3YoVZvxtTvb7Sgt.xml"
