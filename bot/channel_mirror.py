@@ -85,7 +85,18 @@ def convert_to_user_affiliate(link: str, cfg: dict) -> tuple[str, str | None]:
         q = dict(parse_qsl(p.query))
         q["matt_tool"] = matt_tool
         q["matt_word"] = matt_word
-        return urlunparse(p._replace(query=urlencode(q))), real_image
+        full_ml = urlunparse(p._replace(query=urlencode(q)))
+        
+        # Encurta para não poluir o Telegram com links gigantes
+        short_ml = full_ml
+        try:
+            tiny_r = requests.get(f"https://tinyurl.com/api-create.php?url={requests.utils.quote(full_ml, safe='')}", timeout=6)
+            if tiny_r.ok and tiny_r.text.startswith("http"):
+                short_ml = tiny_r.text.strip()
+        except Exception:
+            pass
+
+        return short_ml, real_image
 
     # 2. Amazon (amzn.to, amzlink.to, amazon.com.br)
     if "amazon" in link or "amzn.to" in link or "amzlink.to" in link:
