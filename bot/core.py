@@ -365,6 +365,10 @@ def send_telegram(token: str, chat_id: str, o: Offer, text: str, dry_run: bool) 
                 files = {"photo": ("foto.jpg", out_io, "image/jpeg")}
                 r_file = requests.post(f"{base}/sendPhoto", data={
                     "chat_id": chat_id, "caption": text, "parse_mode": "HTML"}, files=files, timeout=30)
+                if not r_file.ok:
+                    # Fallback sem HTML se falhar na formatação
+                    r_file = requests.post(f"{base}/sendPhoto", data={
+                        "chat_id": chat_id, "caption": text}, files=files, timeout=30)
                 if r_file.ok:
                     return True
                 else:
@@ -375,6 +379,10 @@ def send_telegram(token: str, chat_id: str, o: Offer, text: str, dry_run: bool) 
     r = requests.post(f"{base}/sendMessage", data={
         "chat_id": chat_id, "text": text, "parse_mode": "HTML",
         "disable_web_page_preview": "false"}, timeout=30)
+    if not r.ok:
+        r = requests.post(f"{base}/sendMessage", data={
+            "chat_id": chat_id, "text": text,
+            "disable_web_page_preview": "false"}, timeout=30)
     if not r.ok:
         log.error("Telegram erro: %s", r.text[:300])
     return r.ok

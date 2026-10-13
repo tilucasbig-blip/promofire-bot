@@ -9,6 +9,7 @@ import time
 
 from bot.core import (already_posted, affiliate_url, fetch_feed, fetch_gatry_amazon, format_message, init_db,
                       load_config, mark_posted, passes_filters, send_telegram)
+from bot.channel_mirror import process_and_mirror_channel
 from bot.shopee_batch import load_shopee_batch_offers
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -57,10 +58,21 @@ def load_env(path=".env"):
 def run_cycle(cfg, db, token, dry_run):
     sent = 0
     max_posts = cfg["schedule"]["max_posts_per_cycle"]
-    
-    all_offers = []
 
-    # 1. Coleta produtos reais da Amazon em tempo real
+    # 1. Prioridade Total: Espelhamento direto do canal do Lobão em tempo real
+    # Pega qualquer oferta nova sem exceção, trocando os links dele pelos seus
+    try:
+        mirror_channels = cfg.get("mirror_channels", ["lobaopromo"])
+        for ch in mirror_channels:
+            n_mirrored = process_and_mirror_channel(ch, cfg, db, token, dry_run)
+            sent += n_mirrored
+            if sent >= max_posts:
+                return sent
+    except Exception as e:
+        log.error("Falha no espelhamento do canal: %s", e)
+
+    all_offers = []
+    # 2. Coleta produtos reais da Amazon em tempo real
     try:
         amazon_offers = fetch_gatry_amazon()
         log.info("Coletadas %d ofertas reais da Amazon", len(amazon_offers))
