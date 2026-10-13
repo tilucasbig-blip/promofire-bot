@@ -138,6 +138,10 @@ def fetch_feed(feed_url: str) -> list[Offer]:
         if not title or not link:
             continue
             
+        # Limpa URLs incompletas/cortadas que possam vir embutidas no título pelo RSS
+        title = re.sub(r'https?://\S+', '', title).strip()
+        title = re.sub(r'\s{2,}', ' ', title)
+            
         prices = [_brl(p) for p in PRICE_RE.findall(title + " " + desc)]
         # Se não achou R$ xx,xx mas achou 'por 7199' ou 'por 99'
         if not prices:

@@ -1,11 +1,7 @@
 {
   "database": "ofertas.db",
   "mirror_channels": ["lobaopromo"],
-  "feeds": [
-    "https://rss.app/feeds/AjwHM7YBFRRt8WRf.xml",
-    "https://rss.app/feeds/pcs7wb2ZmJLjFiZv.xml",
-    "https://rss.app/feeds/M3YoVZvxtTvb7Sgt.xml"
-  ],
+  "feeds": [],
   "telegram_chats": ["@PromoFirefast_bo"],
   "schedule": {
     "interval_minutes": 1,
