@@ -221,10 +221,31 @@ def process_and_mirror_channel(channel_username: str, cfg: dict, db, token: str,
             label = "🛒 Comprar no Magalu"
         else:
             label = "🛒 Comprar aqui"
+            
         anchor = f'<a href="{_html.escape(my_link, quote=True)}">{label}</a>'
-        final_text = _html.escape(orig_text, quote=False).replace(_html.escape(orig_link, quote=False), anchor)
+        
+        # Formata o texto destacando instruções e códigos de CUPOM para o usuário copiar facilmente
+        formatted_lines = []
+        for line in orig_text.split("\n"):
+            l_strip = line.strip()
+            # Se a linha menciona cupom, coloca destaque visual e código monoespaçado (clique para copiar)
+            if re.search(r'\bcupom\b', l_strip, re.IGNORECASE):
+                m_code = re.search(r'cupom[:\s]+([A-Za-z0-9_\-]+)', l_strip, re.IGNORECASE)
+                palavra = m_code.group(1) if m_code else ""
+                ignorar = ["de", "do", "da", "no", "na", "para", "por", "em", "um", "uma", "com", "sem", "casa"]
+                if palavra and len(palavra) >= 4 and palavra.lower() not in ignorar:
+                    codigo = palavra.upper()
+                    formatted_lines.append(f"🎟️ <b>Cupom:</b> <code>{codigo}</code> <i>(toque para copiar)</i>")
+                else:
+                    limpa = l_strip.lstrip("-*• ").strip()
+                    formatted_lines.append(f"🎟️ <b>{_html.escape(limpa)}</b>")
+            else:
+                formatted_lines.append(_html.escape(line, quote=False))
+                
+        escaped_text = "\n".join(formatted_lines)
+        final_text = escaped_text.replace(_html.escape(orig_link, quote=False), anchor)
         if anchor not in final_text:
-            final_text += "\n" + anchor
+            final_text += "\n\n" + anchor
         
         from bot.core import Offer, send_telegram
         dummy_offer = Offer(
