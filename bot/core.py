@@ -51,7 +51,13 @@ def init_db(path: str) -> sqlite3.Connection:
 
 
 def already_posted(db, offer: Offer) -> bool:
-    return db.execute("SELECT 1 FROM posted WHERE uid=?", (offer.uid,)).fetchone() is not None
+    # 1. Checa por UID da URL
+    if db.execute("SELECT 1 FROM posted WHERE uid=?", (offer.uid,)).fetchone():
+        return True
+    # 2. Checa por Título nos últimos 7 dias para evitar posts duplicados com links levemente diferentes
+    clean_title = offer.title.strip().lower()
+    row = db.execute("SELECT 1 FROM posted WHERE LOWER(TRIM(title))=? AND posted_at >= datetime('now', '-7 days')", (clean_title,)).fetchone()
+    return row is not None
 
 
 def mark_posted(db, offer: Offer, aff_url: str):
