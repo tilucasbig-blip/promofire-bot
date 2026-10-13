@@ -8,6 +8,21 @@ from bs4 import BeautifulSoup
 log = logging.getLogger("bot")
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
+
+def _is_valid_product_photo(url: str, min_side: int = 300) -> bool:
+    """Baixa a imagem e só aceita se abrir corretamente e tiver tamanho de foto de produto.
+    Avatares/logos de perfil (ex.: 120x120) são rejeitados."""
+    try:
+        import io
+        from PIL import Image
+        resp = requests.get(url, headers=UA, timeout=12)
+        if not resp.ok:
+            return False
+        w, h = Image.open(io.BytesIO(resp.content)).size
+        return min(w, h) >= min_side
+    except Exception:
+        return False
+
 def fetch_telegram_channel_direct(channel_username: str) -> list[dict]:
     """Coleta as últimas mensagens publicadas diretamente em t.me/s/canal sem delay de RSS."""
     url = f"https://t.me/s/{channel_username}"
@@ -72,11 +87,11 @@ def convert_to_user_affiliate(link: str, cfg: dict) -> tuple[str, str | None]:
                         target_url = href.split("?")[0]
                         break
             soup_prod = BeautifulSoup(r.text, "html.parser")
-            for img in soup_prod.find_all("img"):
-                src = img.get("src") or img.get("data-src") or ""
-                if "http2.mlstatic.com/D_NQ_NP_" in src and not src.endswith(".gif"):
-                    real_image = src
-                    break
+            # A foto oficial do produto fica no og:image. A primeira <img> da página
+            # é o AVATAR do perfil de afiliado do concorrente (alt="Logo lobão..."), nunca usar.
+            og = soup_prod.find("meta", attrs={"property": "og:image"})
+            if og and "mlstatic.com" in (og.get("content") or ""):
+                real_image = og["content"]
         except Exception:
             pass
 
@@ -185,9 +200,13 @@ def process_and_mirror_channel(channel_username: str, cfg: dict, db, token: str,
         if not my_link:
             continue
             
-        final_image = high_res_image or image
+        final_image = None
+        for candidate in (high_res_image, image):
+            if candidate and _is_valid_product_photo(candidate):
+                final_image = candidate
+                break
         if not final_image:
-            log.info("Ignorando postagem sem foto do produto: %s", prod_title)
+            log.info("Ignorando postagem sem foto válida do produto: %s", prod_title)
             continue
         
         # Substitui o link do concorrente por um texto curto clicável que aponta para o SEU link oficial
