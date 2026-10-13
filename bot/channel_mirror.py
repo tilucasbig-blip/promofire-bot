@@ -101,7 +101,15 @@ def convert_to_user_affiliate(link: str, cfg: dict) -> tuple[str, str | None]:
         p = urlparse(clean_prod)
         q = dict(parse_qsl(p.query))
         q["tag"] = tag
-        return urlunparse(p._replace(query=urlencode(q))), None
+        full_amz = urlunparse(p._replace(query=urlencode(q)))
+        # Encurta para ficar no formato limpo e elegante igual ao amzlink.to
+        try:
+            tiny_r = requests.get(f"https://tinyurl.com/api-create.php?url={requests.utils.quote(full_amz, safe='')}", timeout=6)
+            if tiny_r.ok and tiny_r.text.startswith("http"):
+                return tiny_r.text.strip(), None
+        except Exception:
+            pass
+        return full_amz, None
 
     # 3. Shopee (shopee.com.br, s.shopee.com.br, shope.ee)
     if "shopee" in link or "shope.ee" in link:
